@@ -187,9 +187,14 @@ def main() -> None:
     # Write to docs/ so GitHub Pages can serve it
     import pathlib
 
-    outpath = pathlib.Path("docs") / "swe-men-hockey.ics"
+    # Use absolute path relative to script location to work correctly
+    # whether script is run from repo root or any other directory
+    script_dir = pathlib.Path(__file__).parent.resolve()
+    repo_root = script_dir.parent
+    outpath = repo_root / "docs" / "swe-men-hockey.ics"
     outpath.parent.mkdir(parents=True, exist_ok=True)
     outpath.write_text(ics_text, encoding="utf-8")
+    print(f"✓ ICS file written to {outpath}")
 
 
 if __name__ == "__main__":
