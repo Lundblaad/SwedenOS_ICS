@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 from bs4 import BeautifulSoup
-from icalendar import Calendar, Event
+from icalendar import Calendar, Event, Timezone, TimezoneStandard, TimezoneDaylight
 
 IIHF_URL = "https://www.iihf.com/en/events/2026/olympic-m/schedule"
 YEAR = 2026
@@ -50,8 +50,23 @@ class Game:
 
 def fetch_lines() -> list[str]:
     """Fetch the schedule page and return normalized non-empty text lines."""
-    r = requests.get(IIHF_URL, timeout=30)
-    r.raise_for_status()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
+    }
+    try:
+        r = requests.get(IIHF_URL, headers=headers, timeout=30)
+        r.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Warning: Could not fetch IIHF schedule ({e})")
+        print("Returning empty list - no games will be generated.")
+        return []
+    
     soup = BeautifulSoup(r.text, "html.parser")
     text = soup.get_text("\n")
     lines = [ln.strip() for ln in text.splitlines()]
@@ -148,6 +163,7 @@ def parse_games(lines: list[str]) -> list[Game]:
 def build_ics(games: list[Game]) -> str:
     """
     Build an Apple Calendar–friendly ICS using `icalendar` (handles line folding and encoding).
+    Includes proper VTIMEZONE for better compatibility with Outlook, iPhone, and other clients.
     """
     cal = Calendar()
     cal.add("prodid", "-//SWE Men Hockey//GitHub Pages//EN")
@@ -155,9 +171,36 @@ def build_ics(games: list[Game]) -> str:
     cal.add("calscale", "GREGORIAN")
     cal.add("method", "PUBLISH")
 
-    # Helpful Apple-specific properties (safe for other clients)
+    # Helpful properties (Apple-specific but safe for all clients)
     cal.add("X-WR-CALNAME", "Sweden – Men's Ice Hockey (OS)")
-    cal.add("X-WR-TIMEZONE", "UTC")
+    cal.add("X-WR-TIMEZONE", "Europe/Rome")
+    cal.add("X-WR-CALDESC", "Sweden men's Olympic ice hockey games at Milano-Cortina 2026")
+
+    # Add VTIMEZONE for Europe/Rome with proper DST transitions
+    # February is in standard time (CET, UTC+1)
+    tz = Timezone()
+    tz.add("tzid", "Europe/Rome")
+    tz.add("x-lic-location", "Europe/Rome")
+    
+    # Standard time (CET)
+    standard = TimezoneStandard()
+    standard.add("dtstart", datetime(1996, 10, 27, 3, 0, 0))
+    standard.add("rrule", {"freq": "yearly", "bymonth": 10, "byday": "-1su"})
+    standard.add("tzoffsetfrom", timedelta(hours=2))
+    standard.add("tzoffsetto", timedelta(hours=1))
+    standard.add("tzname", "CET")
+    tz.add_component(standard)
+    
+    # Daylight time (CEST)
+    daylight = TimezoneDaylight()
+    daylight.add("dtstart", datetime(1981, 3, 29, 2, 0, 0))
+    daylight.add("rrule", {"freq": "yearly", "bymonth": 3, "byday": "-1su"})
+    daylight.add("tzoffsetfrom", timedelta(hours=1))
+    daylight.add("tzoffsetto", timedelta(hours=2))
+    daylight.add("tzname", "CEST")
+    tz.add_component(daylight)
+    
+    cal.add_component(tz)
 
     now = datetime.now(TZ_UTC)
 
@@ -165,14 +208,22 @@ def build_ics(games: list[Game]) -> str:
         ev = Event()
         ev.add("uid", g.uid)
         ev.add("dtstamp", now)
+        # Use UTC times with Z suffix for maximum compatibility
         ev.add("dtstart", g.dtstart_utc)
         ev.add("dtend", g.dtend_utc)
         ev.add("summary", g.summary)
         if g.location:
             ev.add("location", g.location)
-
-        # Optional: mark as confirmed
+        # Add description with match details
+        ev.add("description", g.summary)
+        # Mark as confirmed
         ev.add("status", "CONFIRMED")
+        # Add sequence for updates
+        ev.add("sequence", 0)
+        # Add transparency (show as busy)
+        ev.add("transp", "OPAQUE")
+        # Add categories
+        ev.add("categories", "Sports")
 
         cal.add_component(ev)
 
