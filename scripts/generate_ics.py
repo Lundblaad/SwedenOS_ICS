@@ -74,23 +74,35 @@ def fetch_lines() -> list[str]:
         print(f"Warning: Could not fetch live IIHF schedule ({type(e).__name__})")
     
     # Fallback: Return hardcoded 2026 Milano-Cortina Olympics Sweden games
-    print("Using sample Milano-Cortina 2026 schedule for Sweden men's ice hockey")
+    print("Using Milano-Cortina 2026 schedule for Sweden men's ice hockey")
     return [
-        "10 Feb",
-        "SWE vs CZE",
-        "10:00",
-        "Palaisozzoladrome",
         "13 Feb",
-        "SWE vs LAT",
+        "FIN vs SWE",
         "12:10",
         "Palalido",
-        "17 Feb",
-        "SWE vs USA",
-        "19:30",
+        "14 Feb",
+        "SWE vs SVK",
+        "12:10",
         "Palaisozzoladrome",
+        "17 Feb",
+        "SWE vs TBD",
+        "12:10",
+        "Palalido",
+        "18 Feb",
+        "SWE vs TBD",
+        "12:10",
+        "Palaisozzoladrome",
+        "20 Feb",
+        "SWE vs TBD",
+        "16:40",
+        "Palalido",
         "21 Feb",
-        "SWE vs KAZ",
-        "08:00",
+        "SWE vs TBD",
+        "20:40",
+        "Palaisozzoladrome",
+        "22 Feb",
+        "SWE vs TBD",
+        "14:10",
         "Palalido",
     ]
 
