@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pytz
-from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from icalendar import Calendar, Event, Timezone, TimezoneStandard, TimezoneDaylight
 
@@ -50,6 +49,24 @@ class Game:
 
 def fetch_lines() -> list[str]:
     """Fetch the schedule page using Playwright for JavaScript rendering."""
+    # First try a simple requests GET (faster, avoids needing Playwright browsers)
+    try:
+        import requests
+        resp = requests.get(IIHF_URL, timeout=20, headers={"User-Agent": "swe-ics-bot/1.0 (+https://github.com/)"})
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            text = soup.get_text("\n")
+            lines = [ln.strip() for ln in text.splitlines()]
+            fetched_lines = [ln for ln in lines if ln]
+            if any("vs" in ln for ln in fetched_lines):
+                print("✓ Fetched live schedule from IIHF via requests")
+                return fetched_lines
+        else:
+            print(f"Requests GET returned status {resp.status_code}")
+    except Exception as e:
+        print(f"Requests fetch failed ({type(e).__name__}): {e}")
+
+    # Fall back to Playwright when the page requires JS rendering
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
@@ -60,18 +77,20 @@ def fetch_lines() -> list[str]:
             page.wait_for_timeout(3000)
             html = page.content()
             browser.close()
-            
+
             soup = BeautifulSoup(html, "html.parser")
             text = soup.get_text("\n")
             lines = [ln.strip() for ln in text.splitlines()]
             fetched_lines = [ln for ln in lines if ln]
-            
+
             # If we got real content with games, return it
             if any("vs" in ln for ln in fetched_lines):
-                print("✓ Fetched live schedule from IIHF")
+                print("✓ Fetched live schedule from IIHF via Playwright")
                 return fetched_lines
     except Exception as e:
-        print(f"Warning: Could not fetch live IIHF schedule ({type(e).__name__})")
+        # Often this means Playwright browsers are not installed; give actionable guidance
+        print(f"Warning: Playwright fetch failed ({type(e).__name__}): {e}\n" \
+              "If you installed the Python package, run `playwright install` to install browsers.")
     
     # Fallback: Return hardcoded 2026 Milano-Cortina Olympics Sweden games
     print("Using Milano-Cortina 2026 schedule for Sweden men's ice hockey")
